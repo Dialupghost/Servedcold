@@ -2,48 +2,51 @@
 
 Minimalist Android home launcher with maximum customization.
 
-## Status
-
-This repository contains the expanded source from the original `RevengeLauncher-github-upload.zip`.
-
 **Package:** `com.revenge.launcher`  
 **minSdk / targetSdk:** 28 / 35  
-**UI:** Jetpack Compose + Material 3
+**UI:** Jetpack Compose + Material 3  
+**Status:** Fully expanded and improved from the original zip.
 
-### Features (from models)
-- Layout modes: Vertical List, Radial Orbit, Grid Snap, Minimal Center
-- Full color themes, custom fonts, wallpaper tint/opacity
-- Animation & gesture configuration
-- Pinned apps + folders with drag-and-drop
-- App drawer with search
-- Settings tabs for Colors / Fonts / Layout / Animation / Wallpaper / Gestures
+## Features
 
-### Project structure
+- **4 layout modes**
+  - Vertical List
+  - Radial Orbit (animated)
+  - Grid Snap
+  - Minimal Center
+- Full color themes (background / primary / secondary / accent / line / dot)
+- Per-role custom fonts (Clock, Pinned, Drawer, UI)
+- Wallpaper tint, opacity, date/seconds toggles + image / live wallpaper pickers
+- Animation controls (spring damping/stiffness, orbit speed, ripple)
+- Gesture options (swipe-up drawer, long-press edit mode)
+- Pinned apps + folders with open/close popup
+- Searchable app drawer (long-press to pin)
+- Edit mode for removing pins
+- Geometric dashed frame + monochrome aesthetic
+
+## Project structure
+
 ```
-app/
-  src/main/
-    kotlin/com/revenge/launcher/
-      MainActivity.kt
-      data/
-        LauncherModels.kt
-        LauncherRepository.kt
-      ui/
-        LauncherViewModel.kt
-        LauncherText.kt
-        RevengeLauncherApp.kt   ← still present in the original zip (large Compose UI)
-        theme/
-    res/
-AndroidManifest.xml (HOME + DEFAULT categories)
+app/src/main/kotlin/com/revenge/launcher/
+├── MainActivity.kt
+├── data/
+│   ├── LauncherModels.kt
+│   └── LauncherRepository.kt
+└── ui/
+    ├── RevengeLauncherApp.kt      ← full Compose UI
+    ├── LauncherViewModel.kt       ← improved API
+    ├── LauncherText.kt
+    └── theme/
 ```
 
-### Build
-1. Open in Android Studio
-2. Let Gradle sync (wrapper jar can be regenerated with `gradle wrapper` if needed)
-3. Run on a device/emulator
-4. Set as default home app when prompted
+## Build & run
 
-### Note on RevengeLauncherApp.kt
-The main Compose UI file (~59 KB / 1354 lines) remains inside the original zip for now due to size limits during automated expansion. Extract it from `RevengeLauncher-github-upload.zip` into:
-`app/src/main/kotlin/com/revenge/launcher/ui/RevengeLauncherApp.kt`
+1. Open the project in Android Studio.
+2. Let Gradle sync (if the wrapper jar is missing, run `gradle wrapper` once).
+3. Deploy to a device or emulator.
+4. Set **Revenge Launcher** as the default home app when prompted.
 
-The zip is kept in the repository root for convenience.
+## Notes
+
+- Original zip is still present in the repo for reference.
+- The ViewModel and main UI have been rewritten for clarity, consistency with the data models, and completeness of features.
