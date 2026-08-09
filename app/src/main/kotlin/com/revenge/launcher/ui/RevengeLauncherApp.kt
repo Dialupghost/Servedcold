@@ -21,7 +21,26 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -34,7 +53,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -48,10 +73,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.revenge.launcher.data.*
+import com.revenge.launcher.data.ColorTheme
+import com.revenge.launcher.data.FolderChild
+import com.revenge.launcher.data.FontConfig
+import com.revenge.launcher.data.InstalledApp
+import com.revenge.launcher.data.LayoutMode
+import com.revenge.launcher.data.PinnedItem
+import com.revenge.launcher.data.PinnedItemType
+import com.revenge.launcher.data.SettingsTab
+import com.revenge.launcher.data.TextRole
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -68,7 +102,7 @@ fun RevengeLauncherApp(viewModel: LauncherViewModel) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(theme.background())
+            .background(theme.bg())
             .pointerInput(prefs.gestures.longPressEditMode) {
                 detectTapGestures(onLongPress = {
                     if (prefs.gestures.longPressEditMode) viewModel.toggleEditMode()
@@ -81,26 +115,26 @@ fun RevengeLauncherApp(viewModel: LauncherViewModel) {
             LayoutMode.VERTICAL_LIST -> VerticalListLayout(
                 items = prefs.pinnedItems, theme = theme, font = pinnedFont,
                 editMode = state.editMode,
-                onLaunch = { viewModel.launchPinned(it) },
+                onLaunch = viewModel::launchPinned,
                 onRemove = { viewModel.removePinned(it.id) },
                 onOpenFolder = { viewModel.openFolder(it.id) }
             )
             LayoutMode.RADIAL_ORBIT -> RadialOrbitLayout(
                 items = prefs.pinnedItems, theme = theme, font = pinnedFont,
                 orbitSpeed = prefs.animation.orbitSpeed, editMode = state.editMode,
-                onLaunch = { viewModel.launchPinned(it) },
+                onLaunch = viewModel::launchPinned,
                 onRemove = { viewModel.removePinned(it.id) }
             )
             LayoutMode.GRID_SNAP -> GridSnapLayout(
                 items = prefs.pinnedItems, theme = theme, font = pinnedFont,
                 editMode = state.editMode,
-                onLaunch = { viewModel.launchPinned(it) },
+                onLaunch = viewModel::launchPinned,
                 onRemove = { viewModel.removePinned(it.id) }
             )
             LayoutMode.MINIMAL_CENTER -> MinimalCenterLayout(
                 items = prefs.pinnedItems, theme = theme, font = pinnedFont,
                 editMode = state.editMode,
-                onLaunch = { viewModel.launchPinned(it) },
+                onLaunch = viewModel::launchPinned,
                 onRemove = { viewModel.removePinned(it.id) }
             )
         }
@@ -124,7 +158,7 @@ fun RevengeLauncherApp(viewModel: LauncherViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GearButton(theme) { viewModel.toggleSettings() }
+            ChromeButton("⚙", theme, viewModel::toggleSettings)
             SwipeHandle(theme) {
                 if (prefs.gestures.swipeUpOpensDrawer) viewModel.toggleDrawer(true)
             }
@@ -140,9 +174,7 @@ fun RevengeLauncherApp(viewModel: LauncherViewModel) {
                 apps = state.installedApps.filter {
                     state.drawerQuery.isBlank() || it.label.contains(state.drawerQuery, true)
                 },
-                query = state.drawerQuery,
-                theme = theme,
-                font = drawerFont,
+                query = state.drawerQuery, theme = theme, font = drawerFont,
                 onQueryChange = viewModel::setDrawerQuery,
                 onAppClick = { viewModel.launchApp(it); viewModel.toggleDrawer(false) },
                 onAppLongClick = { viewModel.pinApp(it); viewModel.toggleDrawer(false) },
@@ -159,11 +191,11 @@ fun RevengeLauncherApp(viewModel: LauncherViewModel) {
         }
 
         state.activeFolderId?.let { folderId ->
-            prefs.pinnedItems.firstOrNull { it.id == folderId }?.takeIf { it.type == PinnedItemType.FOLDER }?.let { folder ->
+            prefs.pinnedItems.firstOrNull { it.id == folderId && it.type == PinnedItemType.FOLDER }?.let { folder ->
                 FolderPopup(
-                    folder = folder, theme = theme, font = pinnedFont,
+                    folder, theme, pinnedFont,
                     onChildClick = { viewModel.launchChild(it); viewModel.closeFolder() },
-                    onDismiss = { viewModel.closeFolder() }
+                    onDismiss = viewModel::closeFolder
                 )
             }
         }
@@ -178,7 +210,7 @@ private fun VerticalListLayout(
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 28.dp),
         contentPadding = PaddingValues(top = 140.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(items, key = { it.id }) { item ->
             PinnedRow(item, theme, font, editMode,
@@ -196,7 +228,10 @@ private fun RadialOrbitLayout(
     val infinite = rememberInfiniteTransition(label = "orbit")
     val angle by infinite.animateFloat(
         0f, 360f,
-        infiniteRepeatable(tween((12000 / orbitSpeed.coerceAtLeast(0.2f)).toInt(), easing = LinearEasing), RepeatMode.Restart),
+        infiniteRepeatable(
+            tween((12_000 / orbitSpeed.coerceIn(0.2f, 4f)).toInt(), easing = LinearEasing),
+            RepeatMode.Restart
+        ),
         label = "orbitAngle"
     )
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -208,7 +243,7 @@ private fun RadialOrbitLayout(
                 PinnedChip(item, theme, font, editMode, { onLaunch(item) }, { if (editMode) onRemove(item) })
             }
         }
-        Canvas(Modifier.size(12.dp)) { drawCircle(theme.dot(), size.minDimension / 2) }
+        Canvas(Modifier.size(10.dp)) { drawCircle(theme.dot(), size.minDimension / 2f) }
     }
 }
 
@@ -242,7 +277,7 @@ private fun MinimalCenterLayout(
     ) {
         items.take(6).forEach { item ->
             PinnedRow(item, theme, font, editMode, { onLaunch(item) }, { if (editMode) onRemove(item) }, centered = true)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -259,16 +294,26 @@ private fun PinnedRow(
         horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.width(3.dp).height(18.dp).background(if (item.type == PinnedItemType.FOLDER) theme.accent() else theme.line()))
+        Box(
+            Modifier.width(3.dp).height(18.dp)
+                .background(if (item.type == PinnedItemType.FOLDER) theme.accent() else theme.line())
+        )
         Spacer(Modifier.width(14.dp))
-        LauncherText(item.label.uppercase(Locale.getDefault()), theme.primary(), 15.sp, font, letterSpacing = 0.12f, weight = FontWeight.Medium)
+        LauncherText(
+            text = item.label.uppercase(Locale.getDefault()),
+            color = theme.primary(),
+            size = 15.sp,
+            fontConfig = font,
+            letterSpacing = 0.12f,
+            weight = FontWeight.Medium
+        )
         if (item.type == PinnedItemType.FOLDER) {
             Spacer(Modifier.width(8.dp))
-            LauncherText("${item.children.size}", theme.secondary(), 11.sp, font)
+            LauncherText(text = "${item.children.size}", color = theme.secondary(), size = 11.sp, fontConfig = font)
         }
         if (editMode) {
             Spacer(Modifier.weight(1f))
-            LauncherText("✕", theme.secondary(), 14.sp, font)
+            LauncherText(text = "✕", color = theme.secondary(), size = 14.sp, fontConfig = font)
         }
     }
 }
@@ -279,33 +324,61 @@ private fun PinnedChip(
     item: PinnedItem, theme: ColorTheme, font: FontConfig, editMode: Boolean,
     onClick: () -> Unit, onLongClick: () -> Unit
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(6.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(6.dp)
+    ) {
         Box(
             Modifier.size(48.dp).border(1.dp, theme.line(), CircleShape)
-                .background(if (item.type == PinnedItemType.FOLDER) theme.accent().copy(alpha = 0.12f) else Color.Transparent, CircleShape),
+                .background(
+                    if (item.type == PinnedItemType.FOLDER) theme.accent().copy(alpha = 0.12f)
+                    else Color.Transparent, CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
-            LauncherText(item.label.take(1).uppercase(Locale.getDefault()), theme.primary(), 16.sp, font, weight = FontWeight.Bold)
+            LauncherText(
+                text = item.label.take(1).uppercase(Locale.getDefault()),
+                color = theme.primary(), size = 16.sp, fontConfig = font, weight = FontWeight.Bold
+            )
         }
         Spacer(Modifier.height(6.dp))
-        LauncherText(item.label, theme.secondary(), 10.sp, font, maxLines = 1, letterSpacing = 0.04f)
-        if (editMode) LauncherText("remove", theme.dot(), 9.sp, font)
+        LauncherText(
+            text = item.label, color = theme.secondary(), size = 10.sp,
+            fontConfig = font, maxLines = 1, letterSpacing = 0.04f
+        )
+        if (editMode) {
+            LauncherText(text = "remove", color = theme.dot(), size = 9.sp, fontConfig = font)
+        }
     }
 }
 
 @Composable
-private fun ClockCluster(theme: ColorTheme, font: FontConfig, showSeconds: Boolean, showDate: Boolean, modifier: Modifier = Modifier) {
+private fun ClockCluster(
+    theme: ColorTheme, font: FontConfig, showSeconds: Boolean, showDate: Boolean,
+    modifier: Modifier = Modifier
+) {
     var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) {
-        while (true) { now = Date(); delay(if (showSeconds) 1000L else 30_000L) }
+    LaunchedEffect(showSeconds) {
+        while (true) {
+            now = Date()
+            delay(if (showSeconds) 1_000L else 30_000L)
+        }
     }
-    val timeFmt = SimpleDateFormat(if (showSeconds) "HH:mm:ss" else "HH:mm", Locale.getDefault())
-    val dateFmt = SimpleDateFormat("EEE  d MMM", Locale.getDefault())
+    val timeFmt = remember(showSeconds) {
+        SimpleDateFormat(if (showSeconds) "HH:mm:ss" else "HH:mm", Locale.getDefault())
+    }
+    val dateFmt = remember { SimpleDateFormat("EEE  d MMM", Locale.getDefault()) }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        LauncherText(timeFmt.format(now), theme.primary(), 42.sp, font, letterSpacing = 0.08f, weight = FontWeight.Light)
+        LauncherText(
+            text = timeFmt.format(now), color = theme.primary(), size = 42.sp,
+            fontConfig = font, letterSpacing = 0.08f, weight = FontWeight.Light
+        )
         if (showDate) {
             Spacer(Modifier.height(4.dp))
-            LauncherText(dateFmt.format(now).uppercase(Locale.getDefault()), theme.secondary(), 11.sp, font, letterSpacing = 0.18f)
+            LauncherText(
+                text = dateFmt.format(now).uppercase(Locale.getDefault()),
+                color = theme.secondary(), size = 11.sp, fontConfig = font, letterSpacing = 0.18f
+            )
         }
     }
 }
@@ -315,7 +388,12 @@ private fun GeometricFrame(theme: ColorTheme) {
     Canvas(Modifier.fillMaxSize()) {
         val inset = 18.dp.toPx()
         val stroke = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 10f)))
-        drawRect(theme.line().copy(alpha = 0.35f), Offset(inset, inset), size.copy(width = size.width - inset * 2, height = size.height - inset * 2), style = stroke)
+        drawRect(
+            theme.line().copy(alpha = 0.35f),
+            Offset(inset, inset),
+            size.copy(width = size.width - inset * 2, height = size.height - inset * 2),
+            style = stroke
+        )
         val tick = 12.dp.toPx()
         val c = theme.dot().copy(alpha = 0.6f)
         listOf(
@@ -327,10 +405,14 @@ private fun GeometricFrame(theme: ColorTheme) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GearButton(theme: ColorTheme, onClick: () -> Unit) {
-    Box(Modifier.size(40.dp).border(1.dp, theme.line(), CircleShape).combinedClickable(onClick = onClick) {}, contentAlignment = Alignment.Center) {
-        LauncherText("⚙", theme.secondary(), 16.sp, FontConfig(TextRole.UI))
+private fun ChromeButton(label: String, theme: ColorTheme, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).border(1.dp, theme.line(), CircleShape).combinedClickable(onClick = onClick) {},
+        contentAlignment = Alignment.Center
+    ) {
+        LauncherText(text = label, color = theme.secondary(), size = 16.sp, fontConfig = FontConfig(TextRole.UI))
     }
 }
 
@@ -349,11 +431,15 @@ private fun SwipeHandle(theme: ColorTheme, onSwipeUp: () -> Unit) {
 private fun EditBadge(visible: Boolean, theme: ColorTheme, onClick: () -> Unit) {
     AnimatedVisibility(visible) {
         Box(
-            Modifier.border(1.dp, theme.accent(), RoundedCornerShape(4.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
+            Modifier.border(1.dp, theme.accent(), RoundedCornerShape(4.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
                 .combinedClickable(onClick = onClick) {},
             contentAlignment = Alignment.Center
         ) {
-            LauncherText("EDIT", theme.accent(), 10.sp, FontConfig(TextRole.UI), letterSpacing = 0.15f)
+            LauncherText(
+                text = "EDIT", color = theme.accent(), size = 10.sp,
+                fontConfig = FontConfig(TextRole.UI), letterSpacing = 0.15f
+            )
         }
     }
 }
@@ -364,30 +450,49 @@ private fun DrawerSheet(
     onQueryChange: (String) -> Unit, onAppClick: (InstalledApp) -> Unit,
     onAppLongClick: (InstalledApp) -> Unit, onDismiss: () -> Unit
 ) {
-    Box(Modifier.fillMaxSize().background(theme.background().copy(alpha = 0.97f))) {
-        Column(Modifier.fillMaxSize().padding(WindowInsets.statusBars.asPaddingValues()).padding(horizontal = 24.dp)) {
+    Box(Modifier.fillMaxSize().background(theme.bg().copy(alpha = 0.97f))) {
+        Column(
+            Modifier.fillMaxSize()
+                .padding(WindowInsets.statusBars.asPaddingValues())
+                .padding(horizontal = 24.dp)
+        ) {
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 BasicTextField(
                     value = query, onValueChange = onQueryChange,
                     textStyle = TextStyle(color = theme.primary(), fontSize = 16.sp, letterSpacing = 0.06.sp),
                     cursorBrush = SolidColor(theme.accent()), singleLine = true,
-                    modifier = Modifier.weight(1f).border(1.dp, theme.line(), RoundedCornerShape(2.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+                    modifier = Modifier.weight(1f).border(1.dp, theme.line(), RoundedCornerShape(2.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     decorationBox = { inner ->
-                        if (query.isEmpty()) LauncherText("SEARCH APPS", theme.secondary().copy(alpha = 0.5f), 13.sp, font, letterSpacing = 0.12f)
-                        inner()
+                        Box {
+                            if (query.isEmpty()) {
+                                LauncherText(
+                                    text = "SEARCH APPS",
+                                    color = theme.secondary().copy(alpha = 0.5f),
+                                    size = 13.sp, fontConfig = font, letterSpacing = 0.12f
+                                )
+                            }
+                            inner()
+                        }
                     }
                 )
                 Spacer(Modifier.width(12.dp))
                 Box(
-                    Modifier.border(1.dp, theme.line(), RoundedCornerShape(2.dp)).padding(horizontal = 12.dp, vertical = 12.dp)
+                    Modifier.border(1.dp, theme.line(), RoundedCornerShape(2.dp))
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
                         .combinedClickable(onClick = onDismiss) {},
                     contentAlignment = Alignment.Center
-                ) { LauncherText("CLOSE", theme.secondary(), 11.sp, font, letterSpacing = 0.1f) }
+                ) {
+                    LauncherText(text = "CLOSE", color = theme.secondary(), size = 11.sp, fontConfig = font, letterSpacing = 0.1f)
+                }
             }
             Spacer(Modifier.height(16.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 48.dp)) {
-                items(apps, key = { it.packageName + it.activityName }) { app ->
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                contentPadding = PaddingValues(bottom = 48.dp)
+            ) {
+                items(apps, key = { "${it.packageName}/${it.activityName}" }) { app ->
                     DrawerRow(app, theme, font, { onAppClick(app) }, { onAppLongClick(app) })
                 }
             }
@@ -397,14 +502,18 @@ private fun DrawerSheet(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DrawerRow(app: InstalledApp, theme: ColorTheme, font: FontConfig, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun DrawerRow(
+    app: InstalledApp, theme: ColorTheme, font: FontConfig,
+    onClick: () -> Unit, onLongClick: () -> Unit
+) {
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(vertical = 12.dp, horizontal = 4.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(8.dp).background(theme.dot(), CircleShape))
         Spacer(Modifier.width(14.dp))
-        LauncherText(app.label, theme.primary(), 14.sp, font, letterSpacing = 0.04f)
+        LauncherText(text = app.label, color = theme.primary(), size = 14.sp, fontConfig = font, letterSpacing = 0.04f)
     }
 }
 
@@ -414,23 +523,29 @@ private fun FolderPopup(
     onChildClick: (FolderChild) -> Unit, onDismiss: () -> Unit
 ) {
     Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)).pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f))
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center
     ) {
         Column(
-            Modifier.fillMaxWidth(0.82f).border(1.dp, theme.line(), RoundedCornerShape(4.dp)).background(theme.background()).padding(20.dp)
+            Modifier.fillMaxWidth(0.82f).border(1.dp, theme.line(), RoundedCornerShape(4.dp))
+                .background(theme.bg()).padding(20.dp)
                 .pointerInput(Unit) { detectTapGestures { } }
         ) {
-            LauncherText(folder.label.uppercase(Locale.getDefault()), theme.accent(), 12.sp, font, letterSpacing = 0.2f)
+            LauncherText(
+                text = folder.label.uppercase(Locale.getDefault()),
+                color = theme.accent(), size = 12.sp, fontConfig = font, letterSpacing = 0.2f
+            )
             Spacer(Modifier.height(16.dp))
             folder.children.forEach { child ->
                 Row(
-                    Modifier.fillMaxWidth().combinedClickable(onClick = { onChildClick(child) }) {}.padding(vertical = 10.dp),
+                    Modifier.fillMaxWidth().combinedClickable(onClick = { onChildClick(child) }) {}
+                        .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(Modifier.size(6.dp).background(theme.primary(), CircleShape))
                     Spacer(Modifier.width(12.dp))
-                    LauncherText(child.label, theme.primary(), 14.sp, font)
+                    LauncherText(text = child.label, color = theme.primary(), size = 14.sp, fontConfig = font)
                 }
             }
         }
@@ -443,19 +558,39 @@ private fun SettingsOverlay(viewModel: LauncherViewModel, theme: ColorTheme, uiF
     val state by viewModel.state.collectAsState()
     val prefs = state.preferences
     val tab = prefs.selectedTab
-    val wallpaperPicker = rememberLauncherForActivityResult(GetContent()) { uri: Uri? -> uri?.let { viewModel.setWallpaperFromUri(it) } }
+    val wallpaperPicker = rememberLauncherForActivityResult(GetContent()) { uri: Uri? ->
+        uri?.let { viewModel.setWallpaperFromUri(it) }
+    }
 
-    Box(Modifier.fillMaxSize().background(theme.background().copy(alpha = 0.98f))) {
-        Column(Modifier.fillMaxSize().padding(WindowInsets.statusBars.asPaddingValues()).padding(horizontal = 20.dp)) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                LauncherText("SETTINGS", theme.primary(), 14.sp, uiFont, letterSpacing = 0.2f, weight = FontWeight.Medium)
+    Box(Modifier.fillMaxSize().background(theme.bg().copy(alpha = 0.98f))) {
+        Column(
+            Modifier.fillMaxSize()
+                .padding(WindowInsets.statusBars.asPaddingValues())
+                .padding(horizontal = 20.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LauncherText(
+                    text = "SETTINGS", color = theme.primary(), size = 14.sp,
+                    fontConfig = uiFont, letterSpacing = 0.2f, weight = FontWeight.Medium
+                )
                 Box(
-                    Modifier.border(1.dp, theme.line(), RoundedCornerShape(2.dp)).padding(horizontal = 12.dp, vertical = 8.dp)
-                        .combinedClickable(onClick = { viewModel.toggleSettings() }) {},
+                    Modifier.border(1.dp, theme.line(), RoundedCornerShape(2.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .combinedClickable(onClick = viewModel::toggleSettings) {},
                     contentAlignment = Alignment.Center
-                ) { LauncherText("DONE", theme.secondary(), 11.sp, uiFont, letterSpacing = 0.1f) }
+                ) {
+                    LauncherText(text = "DONE", color = theme.secondary(), size = 11.sp, fontConfig = uiFont, letterSpacing = 0.1f)
+                }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 SettingsTab.entries.forEach { t ->
                     val selected = t == tab
                     Box(
@@ -465,52 +600,92 @@ private fun SettingsOverlay(viewModel: LauncherViewModel, theme: ColorTheme, uiF
                             .combinedClickable(onClick = { viewModel.setSettingsTab(t) }) {},
                         contentAlignment = Alignment.Center
                     ) {
-                        LauncherText(t.name, if (selected) theme.accent() else theme.secondary(), 10.sp, uiFont, letterSpacing = 0.08f)
+                        LauncherText(
+                            text = t.name,
+                            color = if (selected) theme.accent() else theme.secondary(),
+                            size = 10.sp, fontConfig = uiFont, letterSpacing = 0.08f
+                        )
                     }
                 }
             }
+
             Spacer(Modifier.height(20.dp))
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 when (tab) {
                     SettingsTab.LAYOUT -> {
-                        LauncherText("LAYOUT MODE", theme.secondary(), 11.sp, uiFont, letterSpacing = 0.12f)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LauncherText(text = "LAYOUT MODE", color = theme.secondary(), size = 11.sp, fontConfig = uiFont, letterSpacing = 0.12f)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             LayoutMode.entries.forEach { mode ->
-                                ToggleChip(mode.name.replace('_', ' '), prefs.layoutMode == mode, theme) { viewModel.setLayoutMode(mode) }
+                                ToggleChip(
+                                    mode.name.replace('_', ' '),
+                                    prefs.layoutMode == mode,
+                                    theme
+                                ) { viewModel.setLayoutMode(mode) }
                             }
                         }
                     }
                     SettingsTab.COLORS -> {
-                        LauncherText("ACTIVE THEME", theme.secondary(), 11.sp, uiFont, letterSpacing = 0.12f)
+                        LauncherText(text = "ACTIVE THEME", color = theme.secondary(), size = 11.sp, fontConfig = uiFont, letterSpacing = 0.12f)
                         prefs.themes.forEach { t ->
                             Row(
-                                Modifier.fillMaxWidth().border(1.dp, if (t.id == prefs.activeThemeId) theme.accent() else theme.line(), RoundedCornerShape(2.dp))
-                                    .padding(12.dp).combinedClickable(onClick = { viewModel.setActiveTheme(t.id) }) {},
+                                Modifier.fillMaxWidth()
+                                    .border(
+                                        1.dp,
+                                        if (t.id == prefs.activeThemeId) theme.accent() else theme.line(),
+                                        RoundedCornerShape(2.dp)
+                                    )
+                                    .padding(12.dp)
+                                    .combinedClickable(onClick = { viewModel.setActiveTheme(t.id) }) {},
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(Modifier.size(16.dp).background(Color(t.accentArgb.toULong()), CircleShape).border(1.dp, theme.line(), CircleShape))
+                                Box(
+                                    Modifier.size(16.dp)
+                                        .background(Color(t.accentArgb.toULong()), CircleShape)
+                                        .border(1.dp, theme.line(), CircleShape)
+                                )
                                 Spacer(Modifier.width(12.dp))
-                                LauncherText(t.name, theme.primary(), 13.sp, uiFont)
+                                LauncherText(text = t.name, color = theme.primary(), size = 13.sp, fontConfig = uiFont)
                             }
                         }
-                        ToggleLine("SINGLE ACCENT MODE", prefs.singleAccentMode, theme) { viewModel.toggleSingleAccent(it) }
+                        ToggleLine("SINGLE ACCENT MODE", prefs.singleAccentMode, theme, viewModel::toggleSingleAccent)
                     }
                     SettingsTab.FONTS -> {
                         TextRole.entries.forEach { role ->
                             val cfg = prefs.fonts.firstOrNull { it.role == role } ?: FontConfig(role)
-                            FontRow(role, cfg, theme, {}, { viewModel.resetFont(role) })
+                            FontRow(role, cfg, theme) { viewModel.resetFont(role) }
                         }
                     }
                     SettingsTab.ANIMATION -> {
-                        SliderBlock("SPRING DAMPING", prefs.animation.springDamping, 0.2f..1.2f, theme) { viewModel.updateAnimation { copy(springDamping = it) } }
-                        SliderBlock("SPRING STIFFNESS", prefs.animation.springStiffness, 100f..900f, theme) { viewModel.updateAnimation { copy(springStiffness = it) } }
-                        SliderBlock("ORBIT SPEED", prefs.animation.orbitSpeed, 0.2f..3f, theme) { viewModel.updateAnimation { copy(orbitSpeed = it) } }
-                        SliderBlock("RIPPLE STRENGTH", prefs.animation.rippleStrength, 0f..1.5f, theme) { viewModel.updateAnimation { copy(rippleStrength = it) } }
+                        SliderBlock("SPRING DAMPING", prefs.animation.springDamping, 0.2f..1.2f, theme) {
+                            viewModel.updateAnimation { copy(springDamping = it) }
+                        }
+                        SliderBlock("SPRING STIFFNESS", prefs.animation.springStiffness, 100f..900f, theme) {
+                            viewModel.updateAnimation { copy(springStiffness = it) }
+                        }
+                        SliderBlock("ORBIT SPEED", prefs.animation.orbitSpeed, 0.2f..3f, theme) {
+                            viewModel.updateAnimation { copy(orbitSpeed = it) }
+                        }
+                        SliderBlock("RIPPLE STRENGTH", prefs.animation.rippleStrength, 0f..1.5f, theme) {
+                            viewModel.updateAnimation { copy(rippleStrength = it) }
+                        }
                     }
                     SettingsTab.WALLPAPER -> {
-                        SliderBlock("TINT OPACITY", prefs.wallpaper.opacity, 0f..0.8f, theme) { viewModel.updateWallpaper { copy(opacity = it) } }
-                        ToggleLine("SHOW DATE", prefs.wallpaper.showDate, theme) { viewModel.updateWallpaper { copy(showDate = it) } }
-                        ToggleLine("SHOW SECONDS", prefs.wallpaper.showSeconds, theme) { viewModel.updateWallpaper { copy(showSeconds = it) } }
+                        SliderBlock("TINT OPACITY", prefs.wallpaper.opacity, 0f..0.8f, theme) {
+                            viewModel.updateWallpaper { copy(opacity = it) }
+                        }
+                        ToggleLine("SHOW DATE", prefs.wallpaper.showDate, theme) {
+                            viewModel.updateWallpaper { copy(showDate = it) }
+                        }
+                        ToggleLine("SHOW SECONDS", prefs.wallpaper.showSeconds, theme) {
+                            viewModel.updateWallpaper { copy(showSeconds = it) }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ToggleChip("PICK IMAGE", false, theme) { wallpaperPicker.launch("image/*") }
                             ToggleChip("BLACK", false, theme) { viewModel.resetWallpaperToBlack() }
@@ -518,8 +693,12 @@ private fun SettingsOverlay(viewModel: LauncherViewModel, theme: ColorTheme, uiF
                         }
                     }
                     SettingsTab.GESTURES -> {
-                        ToggleLine("SWIPE UP OPENS DRAWER", prefs.gestures.swipeUpOpensDrawer, theme) { viewModel.updateGestures { copy(swipeUpOpensDrawer = it) } }
-                        ToggleLine("LONG PRESS EDIT MODE", prefs.gestures.longPressEditMode, theme) { viewModel.updateGestures { copy(longPressEditMode = it) } }
+                        ToggleLine("SWIPE UP OPENS DRAWER", prefs.gestures.swipeUpOpensDrawer, theme) {
+                            viewModel.updateGestures { copy(swipeUpOpensDrawer = it) }
+                        }
+                        ToggleLine("LONG PRESS EDIT MODE", prefs.gestures.longPressEditMode, theme) {
+                            viewModel.updateGestures { copy(longPressEditMode = it) }
+                        }
                     }
                 }
             }
@@ -528,40 +707,62 @@ private fun SettingsOverlay(viewModel: LauncherViewModel, theme: ColorTheme, uiF
 }
 
 @Composable
-private fun FontRow(role: TextRole, config: FontConfig, theme: ColorTheme, onPick: () -> Unit, onReset: () -> Unit) {
-    Row(Modifier.fillMaxWidth().border(1.dp, theme.line(), RoundedCornerShape(2.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun FontRow(role: TextRole, config: FontConfig, theme: ColorTheme, onReset: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().border(1.dp, theme.line(), RoundedCornerShape(2.dp)).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Column(Modifier.weight(1f)) {
-            LauncherText(role.name, theme.secondary(), 10.sp, FontConfig(TextRole.UI), letterSpacing = 0.1f)
-            LauncherText(config.displayName, theme.primary(), 13.sp, config)
+            LauncherText(text = role.name, color = theme.secondary(), size = 10.sp, fontConfig = FontConfig(TextRole.UI), letterSpacing = 0.1f)
+            LauncherText(text = config.displayName, color = theme.primary(), size = 13.sp, fontConfig = config)
         }
-        ToggleChip("PICK", false, theme, onPick)
-        Spacer(Modifier.width(6.dp))
-        ToggleChip("RST", false, theme, onReset)
+        ToggleChip("RESET", false, theme, onReset)
     }
 }
 
 @Composable
 private fun ToggleLine(text: String, enabled: Boolean, theme: ColorTheme, onToggle: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { onToggle(!enabled) }) {}.padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        LauncherText(text, theme.primary(), 12.sp, FontConfig(TextRole.UI), letterSpacing = 0.06f)
+    Row(
+        Modifier.fillMaxWidth().combinedClickable(onClick = { onToggle(!enabled) }) {}.padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LauncherText(text = text, color = theme.primary(), size = 12.sp, fontConfig = FontConfig(TextRole.UI), letterSpacing = 0.06f)
         Box(
-            Modifier.width(36.dp).height(18.dp).border(1.dp, if (enabled) theme.accent() else theme.line(), RoundedCornerShape(9.dp))
-                .background(if (enabled) theme.accent().copy(alpha = 0.25f) else Color.Transparent, RoundedCornerShape(9.dp)),
+            Modifier.width(36.dp).height(18.dp)
+                .border(1.dp, if (enabled) theme.accent() else theme.line(), RoundedCornerShape(9.dp))
+                .background(
+                    if (enabled) theme.accent().copy(alpha = 0.25f) else Color.Transparent,
+                    RoundedCornerShape(9.dp)
+                ),
             contentAlignment = if (enabled) Alignment.CenterEnd else Alignment.CenterStart
         ) {
-            Box(Modifier.padding(2.dp).size(14.dp).background(if (enabled) theme.accent() else theme.secondary(), CircleShape))
+            Box(
+                Modifier.padding(2.dp).size(14.dp)
+                    .background(if (enabled) theme.accent() else theme.secondary(), CircleShape)
+            )
         }
     }
 }
 
 @Composable
-private fun SliderBlock(label: String, value: Float, range: ClosedFloatingPointRange<Float>, theme: ColorTheme, onChange: (Float) -> Unit) {
+private fun SliderBlock(
+    label: String, value: Float, range: ClosedFloatingPointRange<Float>,
+    theme: ColorTheme, onChange: (Float) -> Unit
+) {
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            LauncherText(label, theme.secondary(), 10.sp, FontConfig(TextRole.UI), letterSpacing = 0.1f)
-            LauncherText("%.2f".format(value), theme.primary(), 11.sp, FontConfig(TextRole.UI))
+            LauncherText(text = label, color = theme.secondary(), size = 10.sp, fontConfig = FontConfig(TextRole.UI), letterSpacing = 0.1f)
+            LauncherText(text = "%.2f".format(value), color = theme.primary(), size = 11.sp, fontConfig = FontConfig(TextRole.UI))
         }
-        Slider(value, onChange, valueRange = range, colors = SliderDefaults.colors(thumbColor = theme.accent(), activeTrackColor = theme.accent(), inactiveTrackColor = theme.line()))
+        Slider(
+            value, onChange, valueRange = range,
+            colors = SliderDefaults.colors(
+                thumbColor = theme.accent(),
+                activeTrackColor = theme.accent(),
+                inactiveTrackColor = theme.line()
+            )
+        )
     }
 }
 
@@ -570,14 +771,19 @@ private fun ToggleChip(text: String, selected: Boolean, theme: ColorTheme, onCli
     Box(
         Modifier.border(1.dp, if (selected) theme.accent() else theme.line(), RoundedCornerShape(2.dp))
             .background(if (selected) theme.accent().copy(alpha = 0.15f) else Color.Transparent)
-            .padding(horizontal = 10.dp, vertical = 7.dp).combinedClickable(onClick = onClick) {},
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+            .combinedClickable(onClick = onClick) {},
         contentAlignment = Alignment.Center
     ) {
-        LauncherText(text, if (selected) theme.accent() else theme.secondary(), 10.sp, FontConfig(TextRole.UI), letterSpacing = 0.06f)
+        LauncherText(
+            text = text,
+            color = if (selected) theme.accent() else theme.secondary(),
+            size = 10.sp, fontConfig = FontConfig(TextRole.UI), letterSpacing = 0.06f
+        )
     }
 }
 
-private fun ColorTheme.background() = Color(backgroundArgb.toULong())
+private fun ColorTheme.bg() = Color(backgroundArgb.toULong())
 private fun ColorTheme.primary() = Color(primaryArgb.toULong())
 private fun ColorTheme.secondary() = Color(secondaryArgb.toULong())
 private fun ColorTheme.accent() = Color(accentArgb.toULong())
