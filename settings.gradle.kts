@@ -1,4 +1,3 @@
-// /data/user/0/com.codex.mobile/files/home/codex/RevengeLauncher/settings.gradle.kts
 pluginManagement {
     repositories {
         google()
