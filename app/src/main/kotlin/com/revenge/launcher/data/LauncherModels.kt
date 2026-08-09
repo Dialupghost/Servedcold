@@ -80,58 +80,78 @@ data class ColorTheme(
     val primaryArgb: Long,
     val secondaryArgb: Long,
     val accentArgb: Long,
-    val textArgb: Long
+    val lineArgb: Long,
+    val dotArgb: Long
+) {
+    companion object {
+        fun monochrome() = ColorTheme(
+            name = "Monochrome",
+            backgroundArgb = 0xFF000000,
+            primaryArgb = 0xFFF5F5F5,
+            secondaryArgb = 0xFF5A5A5A,
+            accentArgb = 0xFFE0E0E0,
+            lineArgb = 0xFF404040,
+            dotArgb = 0xFF777777
+        )
+    }
+}
+
+@Serializable
+data class FolderChild(
+    val id: String = UUID.randomUUID().toString(),
+    val label: String,
+    val packageName: String,
+    val activityName: String
 )
 
 @Serializable
 data class PinnedItem(
     val id: String = UUID.randomUUID().toString(),
-    val type: PinnedItemType,
+    val type: PinnedItemType = PinnedItemType.APP,
+    val label: String,
     val packageName: String? = null,
-    val label: String,
+    val activityName: String? = null,
     val children: List<FolderChild> = emptyList()
-)
-
-@Serializable
-data class FolderChild(
-    val packageName: String,
-    val label: String
-)
-
-@Serializable
-data class InstalledApp(
-    val packageName: String,
-    val label: String,
-    val isSystem: Boolean = false
 )
 
 @Serializable
 data class LauncherPreferences(
     val layoutMode: LayoutMode = LayoutMode.VERTICAL_LIST,
-    val colorTheme: ColorTheme = ColorTheme(
-        name = "Nihil Black",
-        backgroundArgb = 0xFF000000,
-        primaryArgb = 0xFFFFFFFF,
-        secondaryArgb = 0xFF888888,
-        accentArgb = 0xFF00FFAA,
-        textArgb = 0xFFFFFFFF
-    ),
-    val fonts: List<FontConfig> = listOf(
-        FontConfig(TextRole.CLOCK),
-        FontConfig(TextRole.PINNED),
-        FontConfig(TextRole.DRAWER),
-        FontConfig(TextRole.UI)
-    ),
+    val pinnedItems: List<PinnedItem> = emptyList(),
+    val themes: List<ColorTheme> = listOf(ColorTheme.monochrome()),
+    val activeThemeId: String = "",
     val wallpaper: WallpaperConfig = WallpaperConfig(),
     val animation: AnimationConfig = AnimationConfig(),
     val gestures: GestureConfig = GestureConfig(),
-    val pinnedItems: List<PinnedItem> = emptyList(),
-    val showClock: Boolean = true,
-    val clockFormat24h: Boolean = false
+    val fonts: List<FontConfig> = TextRole.entries.map { FontConfig(role = it) },
+    val selectedTab: SettingsTab = SettingsTab.COLORS,
+    val singleAccentMode: Boolean = false
+) {
+    fun activeTheme(): ColorTheme = themes.firstOrNull { it.id == activeThemeId } ?: themes.first()
+}
+
+data class InstalledApp(
+    val label: String,
+    val packageName: String,
+    val activityName: String
 )
 
 data class DragState(
-    val isDragging: Boolean = false,
-    val itemId: String? = null,
-    val bounds: Rect? = null
+    val itemId: String = "",
+    val startIndex: Int = -1,
+    val currentIndex: Int = -1,
+    val dragY: Float = 0f,
+    val itemBounds: Rect = Rect.Zero,
+    val active: Boolean = false
+)
+
+data class LauncherUiState(
+    val preferences: LauncherPreferences = LauncherPreferences(),
+    val installedApps: List<InstalledApp> = emptyList(),
+    val drawerQuery: String = "",
+    val drawerVisible: Boolean = false,
+    val settingsVisible: Boolean = false,
+    val editMode: Boolean = false,
+    val activeFolderId: String? = null,
+    val dragState: DragState = DragState()
 )
