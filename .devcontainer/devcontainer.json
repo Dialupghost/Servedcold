@@ -1,0 +1,45 @@
+{
+  "name": "Android Kotlin (Servedcold)",
+  "image": "mcr.microsoft.com/devcontainers/java:1-17-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": false
+    }
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "containerEnv": {
+    "ANDROID_HOME": "/home/vscode/android-sdk",
+    "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",
+    "JAVA_HOME": "/usr/lib/jvm/msopenjdk-current"
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:ANDROID_HOME}/cmdline-tools/latest/bin:${containerEnv:ANDROID_HOME}/platform-tools:${containerEnv:PATH}"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "fwcd.kotlin",
+        "vscjava.vscode-gradle",
+        "mathiasfrohlich.Kotlin"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic",
+        "java.import.gradle.enabled": true,
+        "files.exclude": {
+          "**/.gradle": true,
+          "**/build": true
+        }
+      }
+    }
+  },
+  "onCreateCommand": "bash .devcontainer/post-create.sh",
+  "postCreateCommand": "echo 'Codespace ready. Run: ./gradlew :app:assembleDebug'",
+  "remoteUser": "vscode"
+}
